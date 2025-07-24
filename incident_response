@@ -1,0 +1,34 @@
+# infrastructure/aws_cdk/lambda/incident_response.py
+import boto3
+import json
+
+def lambda_handler(event, context):
+    # Parse WebSocket message
+    alert = json.loads(event['body'])
+    
+    # Execute response actions
+    if "ISOLATE_ENDPOINT" in alert['response_actions']:
+        isolate_endpoint(alert['source_ip'])
+    
+    if "BLOCK_IP" in alert['response_actions']:
+        update_waf(alert['source_ip'])
+    
+    return {'statusCode': 200}
+
+def isolate_endpoint(ip):
+    ssm = boto3.client('ssm')
+    ssm.send_command(
+        Targets=[{'Key': 'tag:NetworkSegment', 'Values': ['Critical']}],
+        DocumentName='AWS-RunShellScript',
+        Parameters={'commands': [f'iptables -A INPUT -s {ip} -j DROP']}
+    )
+
+def update_waf(ip):
+    waf = boto3.client('wafv2')
+    waf.update_ip_set(
+        Name='MaliciousIPs',
+        Scope='REGIONAL',
+        Id='...',
+        Addresses=[ip],
+        LockToken='...'
+    )
