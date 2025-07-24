@@ -1,0 +1,50 @@
+# backend/app/ml_models/anomaly_detector.py
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Dropout
+from sklearn.preprocessing import StandardScaler
+import joblib
+
+class AnomalyDetector:
+    def __init__(self, input_shape=(60, 25)):
+        self.model = self.build_model(input_shape)
+        self.scaler = StandardScaler()
+        
+    def build_model(self, input_shape):
+        model = Sequential([
+            LSTM(128, return_sequences=True, input_shape=input_shape),
+            Dropout(0.2),
+            LSTM(64, return_sequences=False),
+            Dropout(0.2),
+            Dense(32, activation='relu'),
+            Dense(1, activation='sigmoid')
+        ])
+        model.compile(optimizer='adam', 
+                     loss='binary_crossentropy',
+                     metrics=['accuracy'])
+        return model
+    
+    def train(self, X_train, y_train, epochs=10, batch_size=32):
+        X_train_scaled = self.scaler.fit_transform(X_train)
+        X_train_reshaped = X_train_scaled.reshape((X_train_scaled.shape[0], 60, -1))
+        self.model.fit(X_train_reshaped, y_train, 
+                      epochs=epochs, 
+                      batch_size=batch_size,
+                      validation_split=0.1)
+    
+    def detect(self, netflow_data):
+        scaled_data = self.scaler.transform(netflow_data)
+        reshaped_data = scaled_data.reshape((1, 60, -1))
+        prediction = self.model.predict(reshaped_data)
+        return prediction[0][0] > 0.9  # Threshold for anomaly
+    
+    def save(self, path):
+        self.model.save(f"{path}/model.keras")
+        joblib.dump(self.scaler, f"{path}/scaler.pkl")
+    
+    @classmethod
+    def load(cls, path):
+        instance = cls()
+        instance.model = tf.keras.models.load_model(f"{path}/model.keras")
+        instance.scaler = joblib.load(f"{path}/scaler.pkl")
+        return instance
