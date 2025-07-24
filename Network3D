@@ -1,0 +1,67 @@
+// frontend/src/components/Network3D.js
+import React, { useRef, useEffect } from 'react';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+
+const Network3D = ({ networkData }) => {
+  const mountRef = useRef(null);
+
+  useEffect(() => {
+    // Scene setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    
+    renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+    mountRef.current.appendChild(renderer.domElement);
+    
+    // Add network nodes
+    const nodes = [];
+    networkData.devices.forEach(device => {
+      const geometry = new THREE.SphereGeometry(0.5, 16, 16);
+      const material = new THREE.MeshBasicMaterial({ 
+        color: device.isThreat ? 0xff0000 : 0x00ff00 
+      });
+      const sphere = new THREE.Mesh(geometry, material);
+      sphere.position.set(...device.position);
+      scene.add(sphere);
+      nodes.push(sphere);
+    });
+
+    // Add connections
+    networkData.connections.forEach(conn => {
+      const material = new THREE.LineBasicMaterial({
+        color: conn.isMalicious ? 0xff0000 : 0xffffff
+      });
+      
+      const points = [];
+      points.push(new THREE.Vector3(...conn.from));
+      points.push(new THREE.Vector3(...conn.to));
+      
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const line = new THREE.Line(geometry, material);
+      scene.add(line);
+    });
+
+    // Add controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    camera.position.z = 15;
+
+    // Animation
+    const animate = () => {
+      requestAnimationFrame(animate);
+      nodes.forEach(node => {
+        node.rotation.x += 0.01;
+        node.rotation.y += 0.01;
+      });
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    return () => mountRef.current.removeChild(renderer.domElement);
+  }, [networkData]);
+
+  return <div ref={mountRef} style={{ width: '100%', height: '100vh' }} />;
+};
+
+export default Network3D;
