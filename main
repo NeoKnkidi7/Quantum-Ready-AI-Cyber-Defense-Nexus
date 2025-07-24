@@ -1,0 +1,42 @@
+# backend/app/main.py
+from fastapi import FastAPI, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
+from ml_models.anomaly_detector import AnomalyDetector
+from models import ThreatIntelRequest
+import uvicorn
+import asyncio
+
+app = FastAPI(title="CyberShield AI API")
+
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Initialize models
+anomaly_detector = AnomalyDetector.load("/app/models/anomaly")
+
+@app.websocket("/ws/threat-monitor")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    while True:
+        data = await websocket.receive_json()
+        is_anomaly = anomaly_detector.detect(data['netflow'])
+        if is_anomaly:
+            # Trigger automated response
+            await websocket.send_json({
+                "alert": "ANOMALY_DETECTED",
+                "mitre_technique": "T1059.003",
+                "response_actions": ["ISOLATE_ENDPOINT", "BLOCK_IP"]
+            })
+
+@app.post("/threat-intel")
+async def get_threat_intel(request: ThreatIntelRequest):
+    # STIX/TAXII integration would go here
+    return {"indicators": [...]}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
